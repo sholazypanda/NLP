@@ -1,0 +1,190 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class HMMTrain {
+	private List<String> trainWords;
+	private List<String> trainTags;
+	private Map<String,Map<String,Double>> transitionProb; //nested map to store transition probability, tag followed by tag
+	private Map<String,Map<String,Double>> emissionProb; // nested map to store emission probability, word given tag
+	private Map<String,String> wordTag; // word as key and most frequent tag as value
+	
+	public HMMTrain(){
+		this.trainWords = new ArrayList<String>();
+		this.trainTags = new ArrayList<String>();
+		this.transitionProb = new TreeMap<>();
+		this.emissionProb = new TreeMap<>();
+		this.wordTag = new TreeMap<>();
+	}
+	
+	public Map<String,Map<String,Double>> getTransitionProb(){
+		return transitionProb;
+	}
+	public Map<String,Map<String,Double>> getEmissionProb(){
+		return emissionProb;
+	}
+	public Map<String,String> getWordTag(){
+		return wordTag;
+	}
+	public void getWordsAndTags(String trainF){
+		BufferedReader br;
+		try{
+			br = new BufferedReader(new FileReader(trainF));
+		  	String line;
+		  	int i=0;
+		    while( (line = br.readLine()) != null){
+		    	if(!line.isEmpty()){
+		    	String[] wordTagArray = line.trim().split("/");
+		    	//System.out.println("0"+wordTagArray[0]);
+		    	trainWords.add(i,wordTagArray[0]);
+		    	//System.out.println("1"+wordTagArray[1]);
+		    	trainTags.add(i,wordTagArray[1]);
+		    	i++;
+		    	}
+		    }
+		    br.close();
+		}
+		catch(Exception e){
+			e.printStackTrace();
+		}
+		
+	}
+	
+	public void updateTransitionEmission() {
+		
+		for(int i=0;i<trainWords.size()-1;i++){
+			Map<String,Double> countMap;
+			String tag = trainTags.get(i);
+			String followTag = trainTags.get(i+1);
+			
+			if(!transitionProb.containsKey(tag)){
+				countMap = new TreeMap<String,Double>();
+				countMap.put(followTag,1.0);
+				transitionProb.put(tag,countMap);
+			}
+			else{
+				
+				countMap = transitionProb.get(tag); // get the prev countmap
+				if(countMap.containsKey(followTag)){
+					countMap.put(followTag,countMap.get(followTag)+1);
+				}
+				else{
+					countMap.put(followTag,1.0);// update the prev countmap
+					transitionProb.put(tag,countMap); 
+				}// put it in transitionprob map
+			}
+		}
+		
+	/*	Map<String,Double> cMap = transitionProb.get(".");
+		if(cMap.containsKey(trainTags.get(0))){
+			cMap.put(trainTags.get(0),cMap.get(trainTags.get(0))+1);
+		}
+		else{
+			cMap.put(trainTags.get(0),1.0);// update the prev countmap
+			transitionProb.put(".",cMap); 
+		}*/
+		// update fr the first word
+		for(int i=0;i<trainWords.size();i++){
+			Map<String,Double> countMap;
+			String word = trainWords.get(i);
+			String tag = trainTags.get(i);
+			if(!emissionProb.containsKey(word)){
+				countMap = new TreeMap<String,Double>();
+				countMap.put(tag,1.0);
+				emissionProb.put(word,countMap);
+			}
+			else{
+				//System.out.println("word"+word);
+				countMap = emissionProb.get(word); // get the prev countmap
+				if(countMap.containsKey(tag)){
+					countMap.put(tag,countMap.get(tag)+1);
+				}	
+				else{
+					countMap.put(tag,1.0);// update the prev countmap
+					emissionProb.put(word,countMap); 
+				}
+				// update the prev countmap
+				//emissionProb.put(word,countMap); // put it in emission map
+			}
+		}
+		//update emission for the last word tag pair
+		String lword = trainWords.get(trainWords.size()-1);
+		String ltag = trainTags.get(trainTags.size()-1);
+		Map<String,Double> countMap = emissionProb.get(lword); // get the prev countmap
+		if(countMap.containsKey(ltag)){
+			countMap.put(ltag,countMap.get(ltag)+1);
+		}	
+		else{
+			countMap.put(ltag,1.0);// update the prev countmap
+			emissionProb.put(lword,countMap); 
+		}
+	}
+	//get probability from counts
+	public void train(){
+		for(String tag: transitionProb.keySet()){
+			Map<String,Double> countMap = transitionProb.get(tag);
+			Double sum=0.0;
+			for (Double f : countMap.values()) {
+			    sum += f;
+			}
+			for(String followTag: countMap.keySet()){
+				countMap.put(followTag,(countMap.get(followTag)/sum));
+			}
+			transitionProb.put(tag, countMap);
+		}
+	
+		
+		for(String word: emissionProb.keySet()){
+			
+			Map<String,Double> countMap = emissionProb.get(word);
+			
+			double max = -1;
+			String mostFreqTag = "";
+			for(String tag:countMap.keySet()){
+				double maxFreq = countMap.get(tag);
+				if(maxFreq >max){
+					max = maxFreq;
+					mostFreqTag = tag;
+					//System.out.println("mostFreqTag"+mostFreqTag+" "+"word"+word);
+				}
+				
+			}
+			wordTag.put(word, mostFreqTag);
+			Double sum=0.0;
+			for (Double f : countMap.values()) {
+			    sum += f;
+			}
+			
+			for(String tag: countMap.keySet()){
+				
+				countMap.put(tag,(countMap.get(tag)/sum));
+			}
+			
+			emissionProb.put(word, countMap);
+		}
+		
+		
+	}
+	public void displayResults(){
+		/*
+		for(String tag:transitionProb.keySet()){
+			System.out.println("Tag is::"+tag+" "+"Value is::"+transitionProb.get(tag));
+		}
+		*/
+		
+		/*
+		for(String word:emissionProb.keySet()){
+			System.out.println("Word is::"+word+" "+"Value is::"+emissionProb.get(word));
+		}
+		*/
+		/*
+		for(String word:wordTag.keySet()){
+			System.out.println("Word is::"+word+" "+"Tag is::"+wordTag.get(word));
+		}
+		*/
+	}
+}
